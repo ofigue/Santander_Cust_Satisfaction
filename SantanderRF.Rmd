@@ -1,0 +1,86 @@
+---
+title: "RandomForest"
+author: "Oswaldo F. Domejean"
+date: "March 14, 2016"
+output: word_document
+---
+
+Libraries
+
+```{r}
+library(randomForest)
+library(RCurl)
+library(caTools)
+```
+
+Model Random Forest
+
+```{r}
+
+k = 10
+aucs <- 0
+cv.pred<-data.frame(ID=numeric(), TARGET=numeric())
+n = floor(nrow(train)/k)
+
+for(i in 1:k){
+  s1=((i-1)*n+1)
+  s2=(i*n)
+  subset=s1:s2
+  cv.train=train[-subset,]
+  cv.test=train[subset,]
+
+  cv.test.id <- cv.test$ID
+  cv.train$ID <- NULL
+  cv.test$ID <- NULL
+  train.y <- cv.train$TARGET
+  test.y <- cv.test$TARGET
+  cv.test$TARGET <- NULL
+
+  ModelRF = randomForest(TARGET ~ .,
+                       data=cv.train,
+                       nodesize=10,
+                       mtry=3,
+                       ntree=50,
+                       importance=TRUE)
+  
+  predRF=predict(ModelRF,newdata=cv.test,type="prob")
+  
+  auc <- roc.area(test.y, predRF[,2])
+  aucs<-aucs+auc$A
+
+  # CV predictions
+  cv.pred<-rbind(cv.pred,data.frame(ID=cv.test.id, TARGET=predRF[,2]))
+}
+
+print(paste("AUC: ",aucs/i))
+write.csv(cv.pred, "cv.predRF.csv", row.names = F)
+
+# test prediction
+test.id <- test$ID
+test$ID <- NULL
+
+predRFtest <- predict(ModelRF, test)
+predTest<-data.frame(ID=numeric(), Response=numeric())
+predTest<-data.frame(ID=test.id, TARGET=predRFtest)
+
+write.csv(predRFtest, "predRFtest.csv", row.names = F)
+
+
+# model stats
+RFModel
+summary(RFModel)
+varImpPlot(RFModel)
+# Importance
+a<-importance(RFModel)
+a[sort.list(a[,3], decreasing = TRUE), ]
+a[sort.list(a[,4], decreasing = TRUE), ]
+# GINI Importance
+importance(RFModel, type = 2)
+# Plot Model
+plot(RFModel)
+# Plot Importance
+plot(importance(RFModel), lty=2, pch=16)
+
+
+```
+

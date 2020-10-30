@@ -1,0 +1,91 @@
+---
+title: "GBM"
+author: "Oswaldo F. Domejean"
+date: "March 14, 2016"
+output: word_document
+---
+
+---
+title: "PruModelV20"
+author: "Oswaldo F. Domejean"
+date: "January 5, 2016"
+output: word_document
+---
+
+Libraries
+
+```{r}
+library(gbm)
+library(caTools)
+```
+
+
+GBM
+
+```{r}
+
+k = 10
+aucs <- 0
+cv.pred<-data.frame(ID=numeric(), TARGET=numeric())
+n = floor(nrow(train)/k)
+
+for(i in 1:k){
+  s1=((i-1)*n+1)
+  s2=(i*n)
+  subset=s1:s2
+  cv.train=train[-subset,]
+  cv.test=train[subset,]  
+  
+  cv.test.id <- cv.test$ID
+  cv.train$ID <- NULL
+  cv.test$ID <- NULL
+  train.y <- cv.train$TARGET
+  test.y <- cv.test$TARGET
+  cv.test$TARGET <- NULL
+  
+  ModelGBM <- gbm(TARGET ~.,
+              data=cv.train,
+              n.trees=500,
+              distribution = "gaussian",
+              interaction.depth=10,
+              n.minobsinnode=10,
+              shrinkage=0.1,
+              # cv.folds=3,
+              n.cores=2,
+              #train.fraction=1,
+              #bag.fraction=0.7,
+              verbose=T)  
+
+  predGBM=round(predict(ModelGBM,newdata=cv.test, n.trees=500,type="response"))
+
+  # Metric calculation
+  auc <- roc.area(test.y, predGBM)
+  aucs<-aucs+auc$A
+  
+  # CV predictions
+  # var1<-data.frame(ID=test.id, Response=predXGB)
+  cv.pred<-rbind(cv.pred,data.frame(ID=cv.test.id, TARGET=predGBM))
+
+}
+
+print(paste("AUC: ",aucs/i))
+write.csv(cv.pred, "cv.predGBM.csv", row.names = F)
+
+# test prediction
+test.id <- test$ID
+test$ID <- NULL
+  
+predGBMtest <- predict(ModelGBM, test)
+predTest<-data.frame(ID=numeric(), Response=numeric())
+predTest<-data.frame(ID=test.id, TARGET=predGBMtest)
+
+write.csv(predGBMtest, "predGBMtest.csv", row.names = F)
+
+
+# summary can be used for feature selection
+summary(ModelGBM)
+# optimal number of trees based upon CV (red line is 
+# the validation set
+gbm.perf(ModelGBM)
+
+```

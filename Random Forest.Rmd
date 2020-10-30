@@ -1,0 +1,72 @@
+---
+title: "RandomForest"
+author: "Oswaldo F. Domejean"
+date: "March 14, 2016"
+output: word_document
+---
+
+Libraries
+
+```{r}
+library(randomForest)
+library(RCurl)
+library(caTools)
+```
+
+Data loading
+```{r}
+setwd("~/Documents/Data Mining/Kaggle/BNP Paribas Cardif Claims Management")
+train <- read.table("trainD1.csv", header=T, sep=",")
+test <- read.table("testD1.csv", header=T, sep=",") 
+```
+
+
+Model Random Forest
+
+```{r}
+conjunto<-1:10000
+trainV1=train[conjunto,]
+
+k = 5
+resultCV <- data.frame(ID=integer(), pred=numeric()) 
+n = floor(nrow(trainV1)/k)
+for(i in 1:k){
+  s1=((i-1)*n+1)
+  s2=(i*n)
+  subset=s1:s2
+  cv.train=trainV1[-subset,!(names(trainV1) %in% c("ID"))]
+  test.label <- trainV1[subset,(names(trainV1) %in% c("ID"))]
+  cv.test=trainV1[subset,!(names(trainV1) %in% c("ID"))]
+  
+  RFModel = randomForest(as.factor(target) ~ .,
+                       data=cv.train,
+                       nodesize=10,
+                       mtry=3,
+                       ntree=50,
+                       importance=TRUE)
+  
+  predRF=predict(RFModel,newdata=cv.test[,!(names(cv.test) %in% c("target"))],
+                 type="prob")
+  prediccion<-as.data.frame(cbind(test.label,predRF[,2]))
+  resultCV<-rbind(resultCV,prediccion)
+
+}
+
+# model stats
+RFModel
+summary(RFModel)
+varImpPlot(RFModel)
+# Importance
+a<-importance(RFModel)
+a[sort.list(a[,3], decreasing = TRUE), ]
+a[sort.list(a[,4], decreasing = TRUE), ]
+# GINI Importance
+importance(RFModel, type = 2)
+# Plot Model
+plot(RFModel)
+# Plot Importance
+plot(importance(RFModel), lty=2, pch=16)
+
+
+```
+

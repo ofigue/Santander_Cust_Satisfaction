@@ -1,0 +1,104 @@
+---
+title: "GBM"
+author: "Oswaldo F. Domejean"
+date: "March 14, 2016"
+output: word_document
+---
+
+---
+title: "PruModelV20"
+author: "Oswaldo F. Domejean"
+date: "January 5, 2016"
+output: word_document
+---
+
+Libraries
+
+```{r}
+library(gbm)
+library(caTools)
+```
+
+Data loading
+```{r}
+setwd("~/Dropbox/Prudential Life Insurance Assesment")
+load("listaTrain.RData")
+trainV1<-read.csv("trainV1.csv", sep = ",", colClasses = PruClassTrain, header = TRUE)
+
+load("listaTest.RData")
+testV1<-read.csv("testV1.csv", sep = ",", colClasses = PruClassTest, header = TRUE)
+
+```
+
+GBM
+
+```{r}
+
+k = 5
+err.vect<-rep(NA,k)
+n = floor(nrow(train)/k)
+for(i in 1:k){
+  s1=((i-1)*n+1)
+  s2=(i*n)
+  subset=s1:s2
+  cv.train=train[-subset,]
+  cv.test=train[subset,]  
+  
+  train.label <- cv.train$Response
+  test.label <- cv.test$Response
+  
+  train.data <- cv.train[,!(names(cv.train) %in% c("Id"))]
+  test.data <- cv.test[,!(names(cv.test) %in% c("Id", "Response"))]
+  
+  resp<-data.frame(pred=integer())
+
+  PruGBM <- gbm(Response ~.,
+              data=train.data,
+              n.trees=500,
+              distribution = "gaussian",
+              interaction.depth=10,
+              n.minobsinnode=10,
+              shrinkage=0.1,
+              # cv.folds=3,
+              n.cores=2,
+              train.fraction=1,
+              bag.fraction=0.7,
+              verbose=T)  
+
+  PredGBM=round(predict(PruGBM,newdata=test.data, n.trees=500,type="response"))
+
+  resp[1:length(PredGBM),1] <- PredGBM
+  
+  resp[resp$pred<1, "pred"] <- 1
+  resp[resp$pred>8, "pred"] <- 8
+
+  ScoreQuadraticWeightedKappa(test.label,resp$pred)
+
+  
+  # Kappa
+  err.vect[i]<-ScoreQuadraticWeightedKappa(cv.test$Response,Prediccion)
+
+}
+
+
+print(paste("Kappa: ",mean(err.vect)))
+# summary can be used for feature selection
+summary(PruGBM)
+# optimal number of trees based upon CV (red line is 
+# the validation set
+gbm.perf(PruGBM)
+
+cat("making predictions\n")
+test.data <- test[,!(names(test) %in% c("Id"))]
+
+submission <- data.frame(Id=test$Id)
+submission$Response <- round(predict(PruGBM,newdata=test.data, n.trees=500,type="response"))
+
+# I pretended this was a regression problem and some predictions may be outside the range
+submission[submission$Response<1, "Response"] <- 1
+submission[submission$Response>8, "Response"] <- 8
+
+cat("saving the submission file\n")
+write.csv(submission, "mlr.gbm.beatbench.csv", row.names = FALSE)
+
+```

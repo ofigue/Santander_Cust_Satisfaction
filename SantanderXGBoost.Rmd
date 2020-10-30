@@ -1,0 +1,110 @@
+---
+title: "SantanderData"
+author: "Oswaldo F. Domejean"
+date: "April 14, 2016"
+output: word_document
+---
+
+Libraries
+```{r}
+library('verification')
+library(xgboost)
+library(Matrix)
+```
+
+Model XGBoost
+
+```{r}
+
+param <- list(  objective           = "binary:logistic", 
+                booster             = "gbtree",
+                eval_metric         = "auc",
+                eta                 = 0.0203,
+                max_depth           = 5,
+                subsample           = 0.683,
+                colsample_bytree    = 0.7
+)
+
+k = 10
+aucs <- 0
+cv.pred<-data.frame(ID=numeric(), TARGET=numeric())
+n = floor(nrow(train)/k)
+
+for(i in 1:k){
+  s1=((i-1)*n+1)
+  s2=(i*n)
+  subset=s1:s2
+  cv.train=train[-subset,]
+  cv.test=train[subset,]
+  
+  cv.test.id <- cv.test$ID
+  cv.train$ID <- NULL
+  cv.test$ID <- NULL
+  train.y <- cv.train$TARGET
+  test.y <- cv.test$TARGET
+  
+  cv.train <- sparse.model.matrix(TARGET ~ ., data = cv.train)
+  dtrain <- xgb.DMatrix(data=cv.train, label=train.y)
+  watchlist <- list(train=dtrain)
+
+  ModelXGB <- xgb.train(params            = param, 
+                      data                = dtrain, 
+                      nrounds             = 574, 
+                      verbose             = 1, # 2
+                      watchlist           = watchlist,
+                      maximize            = FALSE # Should be TRUE because is maximize??
+  )
+
+  #cv.test$TARGET <- -1
+  cv.test <- sparse.model.matrix(TARGET ~ ., data = cv.test)
+
+  predXGB <- predict(ModelXGB, cv.test)
+
+  # Metric calculation
+  auc <- roc.area(test.y, predXGB)
+  aucs<-aucs+auc$A
+  
+  # CV predictions
+  # var1<-data.frame(ID=test.id, Response=predXGB)
+  cv.pred<-rbind(cv.pred,data.frame(ID=cv.test.id, TARGET=predXGB))
+
+}
+
+print(paste("AUC: ",aucs/i))
+write.csv(cv.pred, "cv.predXGB.csv", row.names = F)
+
+
+# test prediction
+test.id <- test$ID
+test$ID <- NULL
+  
+test$TARGET <- -1
+test <- sparse.model.matrix(TARGET ~ ., data = test)
+
+predXGBtest <- predict(ModelXGB, test)
+predTest<-data.frame(ID=test.id, TARGET=predXGBtest)
+
+write.csv(predXGBtest, "predXGBtest.csv", row.names = F)
+
+train1<-train[,!(names(train) %in% c("ID", "TARGET"))]
+
+# Important features
+imp_matrix <- xgb.importance(feature_names = names(train1), model = ModelXGB)
+print(imp_matrix)
+
+# Feature importance bar plot by gain
+print(xgb.plot.importance(importance_matrix = imp_matrix))
+
+matriz<-as.data.frame(imp_matrix)
+matriz[order(matriz[,2],decreasing=TRUE),c(1,3)]
+
+```
+
+
+Submission
+```{r}
+submission <- data.frame(ID=test.id, TARGET=preds)
+cat("saving the submission file\n")
+write.csv(submission, "submission.csv", row.names = F)
+```
+

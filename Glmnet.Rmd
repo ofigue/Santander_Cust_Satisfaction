@@ -1,0 +1,91 @@
+---
+title: "Glmnet"
+author: "Oswaldo F. Domejean"
+date: "March 14, 2016"
+output: word_document
+---
+
+Libraries
+
+```{r}
+library(Metrics)
+library(Matrix)
+library(xgboost)
+library(methods)
+library(Ckmeans.1d.dp)
+library(randomForest)
+library(nnet)
+library(RCurl)
+library(gbm)
+library(caTools)
+```
+
+Data loading
+```{r}
+setwd("~/Dropbox/Prudential Life Insurance Assesment")
+trainV1<-read.csv("trainV1.csv", sep = ",", header = TRUE)
+testV1<-read.csv("testV1.csv", sep = ",",  header = TRUE)
+
+```
+
+Model GLMNET
+
+```{r}
+# For train
+# the feature have comma in name, it's changed by _
+RStrain$PromoInterval <- gsub(",", "_", RStrain$PromoInterval)
+RStrain$PromoInterval <- as.factor(RStrain$PromoInterval)
+
+# Dummy StoreType, Assortment, PromoInterval
+dmy <- dummyVars(" ~ StoreType", data=RStrain)
+dmyVars <- data.frame(predict(dmy, newdata = RStrain))
+RStrain <- cbind(RStrain, dmyVars)
+RStrain$StoreType = NULL
+
+dmy <- dummyVars(" ~ Assortment", data=RStrain)
+dmyVars <- data.frame(predict(dmy, newdata = RStrain))
+RStrain <- cbind(RStrain, dmyVars)
+RStrain$Assortment = NULL
+
+dmy <- dummyVars(" ~ PromoInterval", data=RStrain)
+dmyVars <- data.frame(predict(dmy, newdata = RStrain))
+RStrain <- cbind(RStrain, dmyVars)
+RStrain$PromoInterval = NULL
+rm(dmyVars)
+
+# For test
+# the feature have comma in name, it's changed by _
+RStest$PromoInterval <- gsub(",", "_", RStest$PromoInterval)
+RStest$PromoInterval <- as.factor(RStest$PromoInterval)
+
+# Dummy StoreType, Assortment, PromoInterval
+dmy <- dummyVars(" ~ StoreType", data=RStest)
+dmyVars <- data.frame(predict(dmy, newdata = RStest))
+RStest <- cbind(RStest, dmyVars)
+RStest$StoreType = NULL
+
+dmy <- dummyVars(" ~ Assortment", data=RStest)
+dmyVars <- data.frame(predict(dmy, newdata = RStest))
+RStest <- cbind(RStest, dmyVars)
+RStest$Assortment = NULL
+
+dmy <- dummyVars(" ~ PromoInterval", data=RStest)
+dmyVars <- data.frame(predict(dmy, newdata = RStest))
+RStest <- cbind(RStest, dmyVars)
+RStest$PromoInterval = NULL
+rm(dmyVars)
+
+Sales1 = train$Sales[split]
+RStrainMatrix <- sparse.model.matrix(~., RStrain[split,])
+RStestMatrix <- sparse.model.matrix(~., RStest)
+
+RSglmnet <- glmnet(RStrainMatrix, Sales1)
+RSGLMPred <- predict(RSglmnet, RStestMatrix)
+
+RSglmnetCV <- cv.glmnet(RStrainMatrix, Sales1, nfolds=5)
+RSGLMPredCV <- predict(RSglmnetCV, RStrainMatrix,type="response", s=RSglmnetCV$lambda.min)
+
+```
+
+
+
